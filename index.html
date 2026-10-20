@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>국방예산 신규사업 분석 대시보드</title>
+  <!-- Modern Pre-bundled Local CSS -->
+  <link rel="stylesheet" href="css/styles.css">
+  <!-- Offline Vendored Libraries -->
+  <script src="lib/xlsx.full.min.js"></script>
+  <script src="lib/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand-section">
+        <div class="brand-logo">🛡️</div>
+        <div>
+          <h1 class="brand-title">국방예산 신규사업 분석 대시보드</h1>
+          <p class="brand-subtitle" id="datasetSubtitle">2027년 국방예산 정부안 및 신규사업 엑셀/CSV 통합 분석</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" style="display: none;">
+        <button class="btn btn-primary" id="openUploadBtn">
+          <span>📁</span> 엑셀/CSV 업로드
+        </button>
+        <button class="btn btn-outline" id="resetSampleBtn" title="기본 2027년 국방예산 12개 사업으로 복원">
+          <span>🔄</span> 기본 샘플 복원
+        </button>
+        <button class="btn btn-outline" id="exportExcelBtn">
+          <span>📥</span> 엑셀 다운로드
+        </button>
+        <button class="btn btn-outline" id="exportCsvBtn">
+          <span>📄</span> CSV 다운로드
+        </button>
+        <button class="btn btn-outline" id="printBtn">
+          <span>🖨️</span> 인쇄
+        </button>
+        <button class="btn btn-outline" id="themeToggleBtn">
+          <span>🌙</span> 다크모드
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="app-main">
+
+    <!-- Upload Dropzone Panel -->
+    <section class="upload-panel" id="dropZone">
+      <div class="upload-left">
+        <div class="upload-icon">📊</div>
+        <div class="upload-text">
+          <h4 id="datasetTitle">2027년 국방예산 정부안 주요 신규사업 현황</h4>
+          <p>엑셀(.xlsx, .xls) 또는 CSV 파일을 드래그하여 놓거나 위 [엑셀/CSV 업로드] 버튼을 눌러 새 데이터를 분석할 수 있습니다.</p>
+        </div>
+      </div>
+      <div class="upload-right">
+        <span class="badge-category" id="filteredCountBadge">로딩 중...</span>
+      </div>
+    </section>
+
+    <!-- KPI Summary Metrics -->
+    <section class="kpi-grid">
+      <div class="kpi-card highlight">
+        <div class="kpi-header">
+          <span class="kpi-label">총 신규 사업 수</span>
+          <span class="kpi-icon">📋</span>
+        </div>
+        <div class="kpi-value" id="kpiTotalCount">-</div>
+        <div class="kpi-subtext">2027년 정부안 신규 반영 과제</div>
+      </div>
+
+      <div class="kpi-card highlight">
+        <div class="kpi-header">
+          <span class="kpi-label">총 신규 예산액</span>
+          <span class="kpi-icon">💰</span>
+        </div>
+        <div class="kpi-value" id="kpiTotalBudget">-</div>
+        <div class="kpi-subtext">신규 증감액 총계 기준</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-label">최대 규모 신규사업</span>
+          <span class="kpi-icon">🏆</span>
+        </div>
+        <div class="kpi-value" id="kpiMaxBudget" style="font-size: 1.4rem;">-</div>
+        <div class="kpi-subtext text-truncate" id="kpiMaxProject">-</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-label">주관 기관 및 부서</span>
+          <span class="kpi-icon">🏢</span>
+        </div>
+        <div class="kpi-value" id="kpiAgencyCount" style="font-size: 1.35rem;">-</div>
+        <div class="kpi-subtext">방위사업청·국방부·병무청 등</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-label">사업당 평균 예산</span>
+          <span class="kpi-icon">📈</span>
+        </div>
+        <div class="kpi-value" id="kpiAvgBudget">-</div>
+        <div class="kpi-subtext">예산 배정 신규사업 기준</div>
+      </div>
+    </section>
+
+    <!-- Tab Navigation -->
+    <nav class="tabs-nav">
+      <button class="tab-btn active" data-tab="overview">
+        📊 종합 대시보드
+      </button>
+      <button class="tab-btn" data-tab="categories">
+        📑 분야별 심층 분석
+      </button>
+      <button class="tab-btn" data-tab="projects">
+        📋 신규사업별 상세 목록
+      </button>
+      <button class="tab-btn" data-tab="comparison">
+        ⚖️ 사업 비교분석 <span class="badge-orig-no" id="comparisonCountBadge">0</span>
+      </button>
+    </nav>
+
+    <!-- TAB 1: Overview -->
+    <div class="tab-content active" id="tab-overview">
+      <div class="charts-grid">
+        <!-- Category Budget Doughnut Chart -->
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3 class="chart-card-title">분야별 예산 규모 및 점유율</h3>
+            <span class="sub-text">차트 클릭 시 해당 분야 필터링</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="categoryDonutChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Top Projects Bar Chart -->
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3 class="chart-card-title">신규사업별 예산 순위 Top 8</h3>
+            <span class="sub-text">막대 클릭 시 세부정보 팝업</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="topProjectsBarChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Executive Summary Cards -->
+      <div class="chart-card" style="margin-top: 1rem;">
+        <div class="chart-card-header">
+          <h3 class="chart-card-title">💡 2027년 국방 신규사업 핵심 특징 및 정책 시사점</h3>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+          <div style="background: var(--bg-app); padding: 1rem; border-radius: var(--radius-sm); border-left: 4px solid #2563eb;">
+            <div style="font-weight: 700; margin-bottom: 4px; color: var(--primary);">1. 첨단 미래 국방기술 자립화 집중</div>
+            <div style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.45;">
+              국방반도체 자립화 R&D(565억 원), 첨단항공엔진 기술개발(90억 원) 등 첨단 무기체계 핵심부품의 국산화 및 공급망 안보에 대규모 신규 예산이 집중 투입됩니다.
+            </div>
+          </div>
+          <div style="background: var(--bg-app); padding: 1rem; border-radius: var(--radius-sm); border-left: 4px solid #10b981;">
+            <div style="font-weight: 700; margin-bottom: 4px; color: var(--success);">2. 초급간부 및 장병 실질 처우 혁신</div>
+            <div style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.45;">
+              초급간부 기본급 추가 인상(316억 원, 월보수 300만원 달성), 부사관 적금 매칭(189억 원), 병사 단체 상해보험(69억 원) 등 복무 만족도 및 사기 진작책이 신설되었습니다.
+            </div>
+          </div>
+          <div style="background: var(--bg-app); padding: 1rem; border-radius: var(--radius-sm); border-left: 4px solid #8b5cf6;">
+            <div style="font-weight: 700; margin-bottom: 4px; color: #8b5cf6;">3. AI 기반 스마트 국방행정 및 안전</div>
+            <div style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.45;">
+              생성형 AI 병무상담(19.3억 원), 동원훈련 병무청 일원화(13.5억 원), 동원훈련 민간 응급의료팀 근접배치(7.2억 원) 등 국민 체감형 서비스가 강화됩니다.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: Categories Analysis -->
+    <div class="tab-content" id="tab-categories">
+      <!-- Group By Toggle Bar -->
+      <div class="filter-toolbar">
+        <div class="d-flex align-items-center gap-2">
+          <span style="font-weight: 600; font-size: 0.9rem;">분석 기준:</span>
+          <div class="view-toggle-group">
+            <button class="view-toggle-btn group-toggle-btn active" data-group="Category">사업 분야별</button>
+            <button class="view-toggle-btn group-toggle-btn" data-group="Agency">주관 기관별</button>
+          </div>
+        </div>
+        <span class="sub-text">분야별 총 예산액과 사업 건수를 종합적으로 비교합니다.</span>
+      </div>
+
+      <!-- Combo Chart (Budget + Count) -->
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <h3 class="chart-card-title">분야별 예산 규모 및 사업 건수 비교</h3>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="categoryComboChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Cards Grid of Categories -->
+      <div class="category-grid" id="categoryCardsGrid">
+        <!-- Rendered dynamically by JavaScript -->
+      </div>
+    </div>
+
+    <!-- TAB 3: Projects Table & Cards -->
+    <div class="tab-content" id="tab-projects">
+      <!-- Search & Filter Controls -->
+      <div class="filter-toolbar">
+        <div class="filter-group">
+          <!-- Text Search -->
+          <div class="search-input-wrapper">
+            <span class="search-icon">🔍</span>
+            <input type="text" class="search-input" id="searchInput" placeholder="사업명, 주관부서, 내용 키워드 검색...">
+          </div>
+
+          <!-- Category Select -->
+          <select class="filter-select" id="categoryFilter">
+            <option value="ALL">전체 분야</option>
+          </select>
+
+          <!-- Agency Select -->
+          <select class="filter-select" id="agencyFilter">
+            <option value="ALL">전체 주관기관</option>
+          </select>
+
+          <!-- Budget Range Select -->
+          <select class="filter-select" id="budgetFilter">
+            <option value="ALL">예산 규모 전체</option>
+            <option value="OVER_500">500억원 이상</option>
+            <option value="100_500">100억원 ~ 500억원</option>
+            <option value="10_100">10억원 ~ 100억원</option>
+            <option value="UNDER_10">10억원 미만</option>
+            <option value="ZERO">제도개선/시범사업 (0원)</option>
+          </select>
+
+          <!-- Sort Select -->
+          <select class="filter-select" id="sortSelect">
+            <option value="Y27-desc">'27년 예산 높은순</option>
+            <option value="Y27-asc">'27년 예산 낮은순</option>
+            <option value="Diff-desc">증감액 높은순</option>
+            <option value="No-asc">연번 순 (기본)</option>
+            <option value="Name-asc">사업명 가나다순</option>
+          </select>
+        </div>
+
+        <!-- View Mode Toggle -->
+        <div class="view-toggle-group">
+          <button class="view-toggle-btn active" id="viewTableBtn" title="표 형태로 보기">테이블 뷰</button>
+          <button class="view-toggle-btn" id="viewCardBtn" title="카드 형태로 보기">카드 뷰</button>
+        </div>
+      </div>
+
+      <!-- Table View Container -->
+      <div class="table-responsive" id="projectsTableView">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="col-center" style="width: 40px;">비교</th>
+              <th class="col-center" style="width: 50px;">연번</th>
+              <th class="col-center" style="width: 80px;">원사업번호</th>
+              <th>신규 사업명 / 요약</th>
+              <th>주관 기관 / 담당 부서</th>
+              <th class="col-center">분야</th>
+              <th class="col-right" style="width: 90px;">'26년 예산</th>
+              <th class="col-right" style="width: 110px;">'27년 정부안(신규)</th>
+              <th class="col-right" style="width: 100px;">신규 증감액</th>
+              <th class="col-center" style="width: 60px;">단위</th>
+              <th class="col-center" style="width: 90px;">상세</th>
+            </tr>
+          </thead>
+          <tbody id="projectsTableBody">
+            <!-- Rendered dynamically by JavaScript -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Card View Container -->
+      <div class="cards-grid" id="projectsCardView" style="display: none;">
+        <!-- Rendered dynamically by JavaScript -->
+      </div>
+
+      <!-- Empty State -->
+      <div id="projectsEmptyState" style="display: none; padding: 4rem 1rem; text-align: center; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px dashed var(--border-color); margin-top: 1rem;">
+        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🔍</div>
+        <h3>일치하는 신규사업이 없습니다</h3>
+        <p class="text-muted" style="font-size: 0.9rem;">검색어나 필터 조건을 변경해보세요.</p>
+      </div>
+    </div>
+
+    <!-- TAB 4: Project Comparison -->
+    <div class="tab-content" id="tab-comparison">
+      <div id="comparisonContent">
+        <!-- Rendered dynamically by JavaScript -->
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Project Detail Modal Dialog -->
+  <div class="modal-backdrop" id="detailModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <div class="d-flex align-items-center gap-2" style="margin-bottom: 6px;">
+            <span class="badge-orig-no" id="modalOrigNo">제 6 호</span>
+            <span class="badge-category" id="modalCategory">첨단 R&D</span>
+          </div>
+          <h2 class="brand-title" id="modalTitle" style="font-size: 1.3rem;">미래 무기 핵심 국방반도체 자립화 R&D 신설</h2>
+          <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">
+            <span id="modalDept">방위사업청 국방반도체인공지능과</span> | <span>담당자: </span><span id="modalContact">노용준 과장 (02-2079-4550)</span>
+          </div>
+        </div>
+        <button class="modal-close-btn" id="closeModalBtn" title="닫기">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Budget Highlight Banner -->
+        <div class="modal-budget-banner">
+          <div>
+            <div class="budget-label">'26년 예산</div>
+            <div class="budget-value" id="modalY26" style="color: var(--text-muted);">-</div>
+          </div>
+          <div>
+            <div class="budget-label">'27년 정부안 (신규)</div>
+            <div class="budget-value" id="modalY27" style="color: var(--primary);">565.0 억원</div>
+          </div>
+          <div>
+            <div class="budget-label">신규 증감액</div>
+            <div class="budget-value" id="modalDiff" style="color: var(--success);">+565.0 억원</div>
+          </div>
+          <div>
+            <div class="budget-label">예산 단위</div>
+            <div class="budget-value" id="modalUnit" style="color: var(--text-main);">억원</div>
+          </div>
+        </div>
+
+        <!-- Specifications & Details Grid -->
+        <div class="modal-spec-grid">
+          <div class="modal-spec-item">
+            <div class="modal-spec-label">📌 핵심 신규사업 내용 및 추진목표 (Sheet 1)</div>
+            <div class="modal-spec-value" id="modalNote">-</div>
+          </div>
+
+          <div class="modal-spec-item">
+            <div class="modal-spec-label">🎯 지원 대상 및 수혜 규모 (Sheet 2)</div>
+            <div class="modal-spec-value" id="modalTarget">-</div>
+          </div>
+
+          <div class="modal-spec-item">
+            <div class="modal-spec-label">📜 추진 근거 및 법령</div>
+            <div class="modal-spec-value" id="modalBasis">-</div>
+          </div>
+
+          <div class="modal-spec-item">
+            <div class="modal-spec-label">📅 세부 추진 내용 및 도입 일정</div>
+            <div class="modal-spec-value" id="modalDetail">-</div>
+          </div>
+
+          <div class="modal-spec-item">
+            <div class="modal-spec-label">🌟 기대 효과 및 정책 의의</div>
+            <div class="modal-spec-value" id="modalEffect">-</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Scripts -->
+  <script src="js/sample-data.js"></script>
+  <script src="js/excel-parser.js"></script>
+  <script src="js/dashboard.js"></script>
+
+</body>
+</html>
